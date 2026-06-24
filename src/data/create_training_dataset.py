@@ -16,11 +16,8 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
     for line_num, line in enumerate(f, start=1):
 
         try:
-            record = json.loads(line)
 
-            # -------------------------
-            # INPUT
-            # -------------------------
+            record = json.loads(line)
 
             problem = record.get(
                 "1.0_Problem_Summary",
@@ -29,7 +26,7 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
 
             input_data = {
 
-                "incident_description":
+                "problem_description":
                     problem.get(
                         "Problem_Description",
                         ""
@@ -41,74 +38,14 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
                         []
                     ),
 
-                "service_tower":
-                    problem.get(
-                        "Impacted_Service_Tower",
-                        ""
-                    ),
-
-                "affected_service":
-                    problem.get(
-                        "Name_of_Impacted_Applications_or_Infrastructure_Services",
-                        ""
-                    ),
-
-                "category":
-                    problem.get(
-                        "Impacted_Business_Unit",
-                        ""
-                    )
-            }
-
-            # -------------------------
-            # CAPA
-            # -------------------------
-
-            capa = record.get(
-                "4.0_Corrective_and_Preventive_Actions",
-                []
-            )
-
-            corrective_actions = []
-            preventive_actions = []
-
-            for action in capa:
-
-                if not isinstance(action, dict):
-                    continue
-
-                action_type = action.get(
-                    "Action_Type",
-                    ""
-                )
-
-                if action_type == "CA":
-
-                    corrective_actions.append(
-                        action
-                    )
-
-                elif action_type == "PA":
-
-                    preventive_actions.append(
-                        action
-                    )
-
-                else:
-                    # Skip unexpected CAPA formats
-                    continue
-
-            # -------------------------
-            # OUTPUT
-            # -------------------------
-
-            output_data = {
-
                 "technical_investigation":
                     record.get(
                         "2.0_Incident_Review_Technical_Investigation",
                         []
-                    ),
+                    )
+            }
+
+            output_data = {
 
                 "five_why_analysis":
                     record.get(
@@ -122,11 +59,11 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
                         {}
                     ),
 
-                "corrective_actions":
-                    corrective_actions,
-
-                "preventive_actions":
-                    preventive_actions,
+                "corrective_preventive_actions":
+                    record.get(
+                        "4.0_Corrective_and_Preventive_Actions",
+                        []
+                    ),
 
                 "lessons_learned":
                     record.get(
@@ -145,14 +82,8 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
         except Exception as e:
 
             print(
-                f"Skipping record {line_num}: {e}"
+                f"Skipping Record {line_num}: {e}"
             )
-
-            continue
-
-# -------------------------
-# SAVE
-# -------------------------
 
 with open(
     OUTPUT_FILE,
@@ -167,6 +98,10 @@ with open(
             + "\n"
         )
 
-print("\nDone!")
-print(f"Records Created: {len(records)}")
-print(f"Saved To: {OUTPUT_FILE}")
+print(
+    f"\nCreated {len(records)} Records"
+)
+
+print(
+    f"Saved To {OUTPUT_FILE}"
+)

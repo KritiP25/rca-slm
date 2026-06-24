@@ -1,5 +1,3 @@
-# peek_training_dataset.py
-
 import json
 
 FILE = "../../data/processed/training_dataset.jsonl"

@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 INPUT_FILES = [
     "../../data/processed/train.jsonl",
@@ -19,24 +18,38 @@ def build_user_prompt(record):
     inp = record["input"]
 
     return f"""
-Generate a ServiceNow-style RCA.
+You are an enterprise IT Problem Management expert.
+
+Generate ONLY a valid JSON object.
+
+Input Information
 
 Problem Description:
-{inp['problem_description']}
+{inp["problem_description"]}
 
 Business Impact:
-{json.dumps(inp['business_impact'], indent=2)}
+{json.dumps(inp["business_impact"], indent=2)}
 
 Technical Investigation:
-{json.dumps(inp['technical_investigation'], indent=2)}
+{json.dumps(inp["technical_investigation"], indent=2)}
 
-Generate:
-1. 5 Why Analysis
-2. Root Cause Summary
-3. Corrective & Preventive Actions
-4. Lessons Learned
+Generate a JSON object with EXACTLY the following structure:
 
-Do not add unsupported technical assumptions.
+{{
+  "five_why_analysis": [...],
+  "root_cause_summary": {{...}},
+  "corrective_preventive_actions": [...],
+  "lessons_learned": [...]
+}}
+
+Rules:
+
+1. Return ONLY valid JSON.
+2. Do NOT generate explanations outside the JSON.
+3. Do NOT invent technical details that are not supported by the input.
+4. Every statement must be supported by the Problem Description, Business Impact, or Technical Investigation.
+5. Keep the reasoning internally consistent.
+6. Preserve the JSON structure exactly.
 """
 
 

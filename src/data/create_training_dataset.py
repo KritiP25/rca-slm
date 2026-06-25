@@ -19,6 +19,10 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
 
             record = json.loads(line)
 
+            # -----------------------------
+            # INPUT
+            # -----------------------------
+
             problem = record.get(
                 "1.0_Problem_Summary",
                 {}
@@ -45,6 +49,33 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
                     )
             }
 
+            # -----------------------------
+            # OUTPUT
+            # -----------------------------
+
+            capa = []
+
+            for action in record.get(
+                "4.0_Corrective_and_Preventive_Actions",
+                []
+            ):
+
+                capa.append({
+
+                    "Action_Type":
+                        action.get(
+                            "Action_Type",
+                            ""
+                        ),
+
+                    "Action_Description":
+                        action.get(
+                            "Action_Description",
+                            ""
+                        )
+
+                })
+
             output_data = {
 
                 "five_why_analysis":
@@ -60,10 +91,7 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
                     ),
 
                 "corrective_preventive_actions":
-                    record.get(
-                        "4.0_Corrective_and_Preventive_Actions",
-                        []
-                    ),
+                    capa,
 
                 "lessons_learned":
                     record.get(

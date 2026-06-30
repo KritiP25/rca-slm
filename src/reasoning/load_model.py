@@ -6,7 +6,7 @@ import torch
 # ==========================================================
 
 from src.api.config import (
-    BASE_MODEL,
+    
     ADAPTER_PATH,
     MAX_SEQ_LENGTH,
 )
@@ -21,7 +21,7 @@ def load_model():
 
     model, tokenizer = FastLanguageModel.from_pretrained(
 
-        model_name=BASE_MODEL,
+        model_name="unsloth/Qwen2.5-3B-Instruct-bnb-4bit",
 
         max_seq_length=MAX_SEQ_LENGTH,
 

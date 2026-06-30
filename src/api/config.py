@@ -1,4 +1,4 @@
-BASE_MODEL = "unsloth/Qwen3-4B-Instruct-2507"
+BASE_MODEL = "unsloth/Qwen2.5-3B-Instruct-bnb-4bit"
 
 ADAPTER_PATH = "/content/drive/MyDrive/rca_twotask_final_adapter"
 

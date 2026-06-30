@@ -1,0 +1,29 @@
+{
+  "model": "Qwen2.5-3B-Instruct + LoRA two-task",
+  "task_a": {
+    "rouge1": 0.7093,
+    "rouge2": 0.5034,
+    "rougeL": 0.5572,
+    "bleu": 0.4722,
+    "n": 20,
+    "n_failed": 2,
+    "valid_json_pct": 90.0,
+    "five_exact_pct": 90.0,
+    "fully_valid_pct": 90.0,
+    "bertscore_f1": 0.9458
+  },
+  "task_b": {
+    "rouge1": 0.5639,
+    "rouge2": 0.2035,
+    "rougeL": 0.3063,
+    "bleu": 0.1317,
+    "n": 20,
+    "n_failed": 0,
+    "valid_json_pct": 100.0,
+    "has_ca_pct": 100.0,
+    "has_pa_pct": 100.0,
+    "has_lessons_pct": 100.0,
+    "fully_valid_pct": 100.0,
+    "bertscore_f1": 0.8716
+  }
+}

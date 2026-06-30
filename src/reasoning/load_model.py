@@ -5,16 +5,11 @@ import torch
 # Configuration
 # ==========================================================
 
-BASE_MODEL = "unsloth/Qwen3-4B-Instruct-2507"
-
-ADAPTER_PATH = "/content/drive/MyDrive/rca_twotask_final_adapter"
-
-MAX_SEQ_LENGTH = 3072
-
-DTYPE = None
-
-LOAD_IN_4BIT = True
-
+from src.api.config import (
+    BASE_MODEL,
+    ADAPTER_PATH,
+    MAX_SEQ_LENGTH,
+)
 
 # ==========================================================
 # Load Model

@@ -1,23 +1,31 @@
 from unsloth import FastLanguageModel
 
-ADAPTER_PATH = "/content/drive/MyDrive/rca_twotask_final_adapter"
+MODEL = None
+TOKENIZER = None
+
 
 def load_model():
 
-    print("Loading base model...")
+    global MODEL, TOKENIZER
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
+    if MODEL is not None:
+        return MODEL, TOKENIZER
+
+    print("Loading tokenizer and base model...")
+
+    MODEL, TOKENIZER = FastLanguageModel.from_pretrained(
         model_name="unsloth/Qwen2.5-3B-Instruct-bnb-4bit",
         max_seq_length=3072,
         load_in_4bit=True,
+        dtype=None,
     )
 
-    print("=" * 50)
-    print("BEFORE ADAPTER")
-    print(type(model))
-    print(model.config._name_or_path)
-    print("=" * 50)
+    print("Loading LoRA adapter...")
 
-    model.load_adapter(ADAPTER_PATH)
+    MODEL.load_adapter("/content/drive/MyDrive/rca_twotask_final_adapter")
 
-    return model, tokenizer
+    FastLanguageModel.for_inference(MODEL)
+
+    print("Model loaded successfully!")
+
+    return MODEL, TOKENIZER

@@ -1,15 +1,11 @@
 # ==========================================================
 # capa_service.py
 # Orchestrates the full CAPA generation pipeline:
-#   1. Build prompt (task-prefixed, matching training format)
-#   2. Run SLM inference conditioned on approved RCA
+#   1. Build prompt conditioned on approved RCA
+#   2. Run SLM inference
 #   3. Parse JSON output
-#   4. Return structured dict
-#
-# Task B was trained to receive the approved RCA as input
-# so CAPA is conditioned on the root cause — not generated
-# independently. This is the key architectural difference
-# from the old single-task approach.
+#   4. Expand with Groq to verbose enterprise prose
+#   5. Return structured dict + groq status flags
 # ==========================================================
 
 import json
@@ -21,25 +17,21 @@ from src.reasoning.prompts import (
     build_capa_prompt,
     build_capa_regeneration_prompt,
 )
+from src.reasoning.groq_expansion import expand_with_groq
 
 logger = logging.getLogger(__name__)
 
-# Required top-level keys in a valid CAPA JSON output
 REQUIRED_CAPA_KEYS = {"corrective_preventive_actions", "lessons_learned"}
 
 
 def _parse_capa_output(raw_text: str) -> Tuple[Dict[str, Any], bool]:
     """
-    Attempts to parse the model's raw text output as JSON.
-
-    Validates that both required keys are present and that
-    at least one CA and one PA action exist in the list.
+    Parses and validates CAPA JSON output from the SLM.
+    Checks for required keys, CA/PA presence, and non-empty lessons.
 
     Returns:
         (parsed_dict, success_bool)
-        On failure returns (empty dict, False).
     """
-    # Strip accidental markdown code fences
     text = raw_text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1]
@@ -53,31 +45,24 @@ def _parse_capa_output(raw_text: str) -> Tuple[Dict[str, Any], bool]:
         logger.error(f"CAPA JSON parse failed: {e} | raw: {raw_text[:300]}")
         return {}, False
 
-    # Validate required keys
     missing = REQUIRED_CAPA_KEYS - set(data.keys())
     if missing:
         logger.warning(f"CAPA output missing required keys: {missing}")
         return data, False
 
-    # Validate actions list is non-empty
     actions = data.get("corrective_preventive_actions", [])
     if not isinstance(actions, list) or len(actions) == 0:
         logger.warning("corrective_preventive_actions is empty or not a list")
         return data, False
 
-    # Validate at least one CA and one PA exist
     types = [a.get("action_type", "").upper() for a in actions]
-    has_ca = any("CA" in t or "CORRECTIVE" in t for t in types)
-    has_pa = any("PA" in t or "PREVENTIVE" in t for t in types)
-
-    if not has_ca:
+    if not any("CA" in t or "CORRECTIVE" in t for t in types):
         logger.warning("CAPA output missing at least one CA action")
         return data, False
-    if not has_pa:
+    if not any("PA" in t or "PREVENTIVE" in t for t in types):
         logger.warning("CAPA output missing at least one PA action")
         return data, False
 
-    # Validate lessons_learned is non-empty
     lessons = data.get("lessons_learned", [])
     if not isinstance(lessons, list) or len(lessons) == 0:
         logger.warning("lessons_learned is empty or not a list")
@@ -91,44 +76,70 @@ def generate_capa(
     business_impact: str,
     technical_investigation: str,
     approved_rca: Dict[str, Any],
+    groq_api_key: str = "",
 ) -> Dict[str, Any]:
     """
-    Generates structured CAPA using the fine-tuned SLM.
-    CAPA is conditioned on the approved RCA — this is Task B.
+    Generates structured CAPA conditioned on the approved RCA,
+    then expands to verbose enterprise prose using Groq.
 
     Args:
         problem_description:     What happened.
         business_impact:         Business consequences.
         technical_investigation: Timeline of events.
         approved_rca:            Approved RCA dict from Task A.
+        groq_api_key:            Groq API key. If empty, skips expansion.
 
     Returns:
-        Dict containing:
-            corrective_preventive_actions: List of {action_type, action_description, action_owner}.
-            lessons_learned:               List of strings.
-            parse_success:                 Bool — False if output could not be parsed.
-            raw_output:                    Raw model text for debugging.
+        Dict with corrective_preventive_actions, lessons_learned,
+        parse_success, groq_available, hallucination_reverted, raw_output.
     """
-    # Serialize the approved RCA dict to a JSON string for inclusion in prompt
-    approved_rca_text = json.dumps(approved_rca, indent=2)
-
     prompt = build_capa_prompt(
         problem_description=problem_description,
         business_impact=business_impact,
         technical_investigation=technical_investigation,
-        approved_rca=approved_rca_text,
+        approved_rca=json.dumps(approved_rca, indent=2),
     )
 
     raw_output = generate_output(prompt)
     parsed, success = _parse_capa_output(raw_output)
 
     if not success:
-        logger.error("CAPA generation produced unparseable or incomplete output.")
+        logger.error("CAPA generation produced unparseable output.")
+        return {
+            "corrective_preventive_actions": [],
+            "lessons_learned": [],
+            "parse_success": False,
+            "groq_available": True,
+            "hallucination_reverted": False,
+            "raw_output": raw_output,
+        }
+
+    # ── Groq expansion ────────────────────────────────────
+    groq_available = True
+    hallucination_reverted = False
+
+    if groq_api_key:
+        # Build incident text as source-of-truth for hallucination check
+        incident_text = (
+            f"Problem Description:\n{problem_description}\n\n"
+            f"Business Impact:\n{business_impact}\n\n"
+            f"Technical Investigation:\n{technical_investigation}\n\n"
+            f"Approved Root Cause:\n{json.dumps(approved_rca, indent=2)}"
+        )
+        parsed, groq_available, hallucination_reverted = expand_with_groq(
+            groq_api_key=groq_api_key,
+            slm_json=parsed,
+            original_incident=incident_text,
+        )
+    else:
+        logger.info("No Groq API key provided — skipping expansion.")
 
     return {
         "corrective_preventive_actions": parsed.get("corrective_preventive_actions", []),
         "lessons_learned": parsed.get("lessons_learned", []),
-        "parse_success": success,
+        "parse_success": True,
+        "groq_available": groq_available,
+        "hallucination_reverted": hallucination_reverted,
         "raw_output": raw_output,
     }
 
@@ -138,17 +149,19 @@ def regenerate_capa(
     approved_rca: Dict[str, Any],
     previous_capa: Dict[str, Any],
     user_feedback: str,
+    groq_api_key: str = "",
 ) -> Dict[str, Any]:
     """
-    Regenerates CAPA incorporating human reviewer feedback.
-    The approved RCA stays unchanged — only CAPA is regenerated.
+    Regenerates CAPA incorporating human reviewer feedback,
+    then expands with Groq.
 
     Args:
         original_incident: Dict with problem_description, business_impact,
                            technical_investigation.
-        approved_rca:      Approved RCA dict — passed as context, not changed.
+        approved_rca:      Approved RCA — passed as context, not changed.
         previous_capa:     Previously generated CAPA dict.
         user_feedback:     Human reviewer's feedback string.
+        groq_api_key:      Groq API key.
 
     Returns:
         Same shape as generate_capa().
@@ -170,11 +183,35 @@ def regenerate_capa(
     parsed, success = _parse_capa_output(raw_output)
 
     if not success:
-        logger.error("CAPA regeneration produced unparseable or incomplete output.")
+        logger.error("CAPA regeneration produced unparseable output.")
+        return {
+            "corrective_preventive_actions": [],
+            "lessons_learned": [],
+            "parse_success": False,
+            "groq_available": True,
+            "hallucination_reverted": False,
+            "raw_output": raw_output,
+        }
+
+    groq_available = True
+    hallucination_reverted = False
+
+    if groq_api_key:
+        full_incident_text = (
+            f"{incident_text}\n\n"
+            f"Approved Root Cause:\n{json.dumps(approved_rca, indent=2)}"
+        )
+        parsed, groq_available, hallucination_reverted = expand_with_groq(
+            groq_api_key=groq_api_key,
+            slm_json=parsed,
+            original_incident=full_incident_text,
+        )
 
     return {
         "corrective_preventive_actions": parsed.get("corrective_preventive_actions", []),
         "lessons_learned": parsed.get("lessons_learned", []),
-        "parse_success": success,
+        "parse_success": True,
+        "groq_available": groq_available,
+        "hallucination_reverted": hallucination_reverted,
         "raw_output": raw_output,
     }

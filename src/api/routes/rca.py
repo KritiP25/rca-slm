@@ -1,10 +1,13 @@
 # ==========================================================
 # routes/rca.py
 # FastAPI route handlers for RCA generation and regeneration.
-# Returns structured parsed JSON (not raw strings) so the
-# frontend receives typed data it can display directly.
+# Returns structured parsed JSON so the frontend receives
+# typed data it can display directly.
+# Groq API key is read from environment variable GROQ_API_KEY
+# set in the Colab notebook at session start.
 # ==========================================================
 
+import os
 import logging
 from fastapi import APIRouter, HTTPException
 
@@ -24,7 +27,6 @@ def _build_validation_placeholder() -> ValidationResult:
     """
     Returns a passing validation result placeholder.
     Full validation (rule-based + semantic) will be added in a later step.
-    For now this allows the endpoint to return the correct response shape.
     """
     return ValidationResult(
         passed=True,
@@ -38,16 +40,17 @@ def _build_validation_placeholder() -> ValidationResult:
 def generate(request: RCARequest):
     """
     Generates a structured RCA from incident details.
-    Calls the SLM inference pipeline and returns parsed JSON.
+    Pipeline: SLM inference → Groq expansion → return parsed JSON.
+    Groq expansion is skipped if GROQ_API_KEY is not set.
     """
     try:
         result = generate_rca(
             problem_description=request.problem_description,
             business_impact=request.business_impact,
             technical_investigation=request.technical_investigation,
+            groq_api_key=os.environ.get("GROQ_API_KEY", ""),
         )
 
-        # If parsing failed, return a 422 with the raw output for debugging
         if not result["parse_success"]:
             raise HTTPException(
                 status_code=422,
@@ -61,11 +64,11 @@ def generate(request: RCARequest):
             five_why_analysis=result["five_why_analysis"],
             root_cause_summary=result["root_cause_summary"],
             validation=_build_validation_placeholder(),
-            groq_available=True,
+            groq_available=result["groq_available"],
         )
 
     except HTTPException:
-        raise   # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         logger.error(f"/generate-rca failed: {e}", exc_info=True)
         raise HTTPException(
@@ -78,12 +81,14 @@ def generate(request: RCARequest):
 def regenerate(request: RegenerateRCARequest):
     """
     Regenerates RCA incorporating human reviewer feedback.
+    Pipeline: SLM inference with feedback → Groq expansion → return JSON.
     """
     try:
         result = regenerate_rca(
             original_incident=request.original_incident,
             previous_rca=request.previous_rca,
             user_feedback=request.user_feedback,
+            groq_api_key=os.environ.get("GROQ_API_KEY", ""),
         )
 
         if not result["parse_success"]:
@@ -99,7 +104,7 @@ def regenerate(request: RegenerateRCARequest):
             five_why_analysis=result["five_why_analysis"],
             root_cause_summary=result["root_cause_summary"],
             validation=_build_validation_placeholder(),
-            groq_available=True,
+            groq_available=result["groq_available"],
         )
 
     except HTTPException:

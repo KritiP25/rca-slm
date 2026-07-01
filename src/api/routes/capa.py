@@ -2,8 +2,10 @@
 # routes/capa.py
 # FastAPI route handlers for CAPA generation and regeneration.
 # CAPA is always conditioned on the approved RCA from Task A.
+# Groq API key is read from environment variable GROQ_API_KEY.
 # ==========================================================
 
+import os
 import logging
 from fastapi import APIRouter, HTTPException
 
@@ -36,7 +38,8 @@ def _build_validation_placeholder() -> ValidationResult:
 def generate(request: CAPARequest):
     """
     Generates structured CAPA conditioned on the approved RCA.
-    The approved_rca field must be the parsed RCA dict from /generate-rca.
+    Pipeline: SLM inference → Groq expansion → return parsed JSON.
+    approved_rca must be the parsed RCA dict from /generate-rca.
     """
     try:
         result = generate_capa(
@@ -44,6 +47,7 @@ def generate(request: CAPARequest):
             business_impact=request.business_impact,
             technical_investigation=request.technical_investigation,
             approved_rca=request.approved_rca,
+            groq_api_key=os.environ.get("GROQ_API_KEY", ""),
         )
 
         if not result["parse_success"]:
@@ -59,7 +63,7 @@ def generate(request: CAPARequest):
             corrective_preventive_actions=result["corrective_preventive_actions"],
             lessons_learned=result["lessons_learned"],
             validation=_build_validation_placeholder(),
-            groq_available=True,
+            groq_available=result["groq_available"],
         )
 
     except HTTPException:
@@ -77,6 +81,7 @@ def regenerate(request: RegenerateCAPARequest):
     """
     Regenerates CAPA incorporating human reviewer feedback.
     The approved RCA is passed as context and remains unchanged.
+    Pipeline: SLM inference with feedback → Groq expansion → return JSON.
     """
     try:
         result = regenerate_capa(
@@ -84,6 +89,7 @@ def regenerate(request: RegenerateCAPARequest):
             approved_rca=request.approved_rca,
             previous_capa=request.previous_capa,
             user_feedback=request.user_feedback,
+            groq_api_key=os.environ.get("GROQ_API_KEY", ""),
         )
 
         if not result["parse_success"]:
@@ -99,7 +105,7 @@ def regenerate(request: RegenerateCAPARequest):
             corrective_preventive_actions=result["corrective_preventive_actions"],
             lessons_learned=result["lessons_learned"],
             validation=_build_validation_placeholder(),
-            groq_available=True,
+            groq_available=result["groq_available"],
         )
 
     except HTTPException:

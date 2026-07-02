@@ -169,6 +169,36 @@ def _parse_groq_response(text: str) -> Tuple[Dict[str, Any], bool]:
         logger.error(f"Groq response JSON parse failed: {e}")
         return {}, False
 
+def _strip_extra_keys(
+    groq_json: Dict[str, Any],
+    slm_json: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Removes any top-level keys from groq_json that were not
+    present in the original slm_json.
+
+    Also recurses into root_cause_summary to strip extra subkeys
+    since Groq commonly adds fields like 'statement_continued' there.
+
+    Args:
+        groq_json: Expanded JSON from Groq.
+        slm_json:  Original JSON from the SLM (source of allowed keys).
+
+    Returns:
+        Cleaned dict with only the original keys preserved.
+    """
+    # Strip unknown top-level keys
+    cleaned = {k: groq_json[k] for k in slm_json if k in groq_json}
+
+    # Recurse into root_cause_summary if present — strip subkeys too
+    if "root_cause_summary" in cleaned and "root_cause_summary" in slm_json:
+        original_subkeys = set(slm_json["root_cause_summary"].keys())
+        cleaned["root_cause_summary"] = {
+            k: v for k, v in cleaned["root_cause_summary"].items()
+            if k in original_subkeys
+        }
+
+    return cleaned
 
 def expand_with_groq(
     groq_api_key: str,
@@ -254,6 +284,11 @@ def expand_with_groq(
         )
         return slm_json, True, True
 
-    # ── Success ───────────────────────────────────────────
+   # ── Strip unknown keys introduced by Groq ────────────────
+    # Groq sometimes adds extra keys not present in the SLM output.
+    # We only keep keys that existed in the original SLM JSON to
+    # prevent schema drift from reaching the frontend or report generator.
+    groq_json = _strip_extra_keys(groq_json, slm_json)
+
     logger.info("Groq expansion successful.")
     return groq_json, True, False

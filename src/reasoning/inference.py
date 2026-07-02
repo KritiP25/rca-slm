@@ -3,7 +3,7 @@ import torch
 from src.reasoning.load_model import load_model
 
 
-def generate_output(user_content, max_new_tokens=1200):
+def generate_output(user_content, max_new_tokens=2000):
 
     model, tokenizer = load_model()
 

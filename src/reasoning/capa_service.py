@@ -57,12 +57,14 @@ def _parse_capa_output(raw_text: str) -> Tuple[Dict[str, Any], bool]:
 
     types = [a.get("action_type", "").upper() for a in actions]
     if not any("CA" in t or "CORRECTIVE" in t for t in types):
-        logger.warning("CAPA output missing at least one CA action")
-        return data, False
+        logger.warning("CAPA output missing at least one CA action — returning partial output")
+        # Return data with success=True so frontend receives what was generated
+        # rather than blocking entirely. User can regenerate with feedback.
+        return data, True
     if not any("PA" in t or "PREVENTIVE" in t for t in types):
-        logger.warning("CAPA output missing at least one PA action")
-        return data, False
-
+        logger.warning("CAPA output missing at least one PA action — returning partial output")
+        return data, True
+    
     lessons = data.get("lessons_learned", [])
     if not isinstance(lessons, list) or len(lessons) == 0:
         logger.warning("lessons_learned is empty or not a list")

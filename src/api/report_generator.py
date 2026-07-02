@@ -160,9 +160,9 @@ def _populate_header(doc: Document, problem_description: str) -> None:
         if header.tables:
             header_table = header.tables[0]
             if header_table.rows and len(header_table.rows[0].cells) >= 1:
-                # Use first 80 chars of problem description as the title
-                short_title = f"IT RCA — {problem_description[:80]}"
-                if len(problem_description) > 80:
+                # Use first 120 chars of problem description as the title
+                short_title = f"IT RCA — {problem_description[:120]}"
+                if len(problem_description) > 120:
                     short_title += "..."
                 _set_cell_text(header_table.rows[0].cells[0], short_title)
                 # Cell 1 (problem number) — left unchanged, user fills
@@ -267,7 +267,6 @@ def _populate_technical_investigation(
 
 
 # ── Table 4 — 5-Why Analysis ──────────────────────────────
-
 def _populate_five_why(
     doc: Document,
     five_why_analysis: List[Dict[str, str]],
@@ -278,27 +277,37 @@ def _populate_five_why(
 
     Row 0 is the header row — kept as-is.
     Rows 1+ are data rows — cleared and replaced.
-
-    Each entry: {question, answer}
+    Template row is captured from Row 1 (first data row)
+    BEFORE deletion so new rows inherit data row formatting
+    (no purple background) not header row formatting.
     """
     table = doc.tables[4]
+
+    # Capture data row format BEFORE deleting — Row 1 is first data row
+    # Using Row 0 (header) would copy purple background to all new rows
+    import copy
+    template_row_xml = copy.deepcopy(table.rows[1]._tr)
 
     # Remove existing data rows (row 1 onwards)
     data_rows = table.rows[1:]
     for row in data_rows:
         row._element.getparent().remove(row._element)
 
-    template_row = table.rows[0]  # Use header row as format reference
-
+    # Create a temporary row object from the saved XML to use as template
+    from docx.oxml import OxmlElement
     for i, entry in enumerate(five_why_analysis):
         question = entry.get("question", f"Why {i+1}?")
         answer   = entry.get("answer", "")
-        _add_table_row(
-            table=table,
-            template_row=template_row,
-            values=[question, answer]
-        )
 
+        # Deep copy the saved data row XML for each new row
+        new_tr = copy.deepcopy(template_row_xml)
+        table._tbl.append(new_tr)
+        new_row = table.rows[-1]
+
+        _clear_content_controls(new_row.cells[0])
+        _clear_content_controls(new_row.cells[1])
+        _set_cell_text(new_row.cells[0], question)
+        _set_cell_text(new_row.cells[1], answer)
 
 # ── Table 5 — Root Cause Summary ─────────────────────────
 
@@ -336,33 +345,37 @@ def _populate_capa(
     and replaces them with AI-generated actions.
 
     Row 0 is the header row — kept as-is.
-    Rows 1+ are data rows — cleared and replaced.
-
-    Each action: {action_type, action_description, action_owner}
-    Columns 3 (Due Date), 4 (Status), 5 (Ticket) — left blank for user to fill.
+    Template row captured from Row 1 (first data row) BEFORE
+    deletion so new rows have no purple background.
+    Columns 3,4,5 (Due Date, Status, Ticket) left blank.
     """
     table = doc.tables[6]
+
+    # Capture data row format BEFORE deleting
+    import copy
+    template_row_xml = copy.deepcopy(table.rows[1]._tr)
 
     # Remove existing data rows
     data_rows = table.rows[1:]
     for row in data_rows:
         row._element.getparent().remove(row._element)
 
-    template_row = table.rows[0]  # Header row as format reference
-
     for action in corrective_preventive_actions:
-        _add_table_row(
-            table=table,
-            template_row=template_row,
-            values=[
-                action.get("action_type", ""),
-                action.get("action_description", ""),
-                action.get("action_owner", ""),
-                "",   # Due Date — user fills
-                "",   # Status — user fills
-                "",   # Ticket number — user fills
-            ]
-        )
+        new_tr = copy.deepcopy(template_row_xml)
+        table._tbl.append(new_tr)
+        new_row = table.rows[-1]
+
+        # Clear all cells first
+        for cell in new_row.cells:
+            _clear_content_controls(cell)
+
+        _set_cell_text(new_row.cells[0], action.get("action_type", ""))
+        _set_cell_text(new_row.cells[1], action.get("action_description", ""))
+        _set_cell_text(new_row.cells[2], action.get("action_owner", ""))
+        _set_cell_text(new_row.cells[3], "")   # Due Date — user fills
+        _set_cell_text(new_row.cells[4], "")   # Status — user fills
+        _set_cell_text(new_row.cells[5], "")   # Ticket — user fills
+
 
 
 # ── Paragraph 58 — Lessons Learned ───────────────────────

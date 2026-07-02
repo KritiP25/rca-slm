@@ -169,7 +169,6 @@ def _populate_header(doc: Document, problem_description: str) -> None:
 
 
 # ── Table 1 — Problem Summary ─────────────────────────────
-
 def _populate_problem_summary(
     doc: Document,
     problem_description: str,
@@ -184,6 +183,9 @@ def _populate_problem_summary(
 
     Row 0 (Problem Number) — left as-is, user fills after download.
     Row 3 (Patient Safety) — left as-is.
+    Row 5 (Business Unit) — has only 1 cell in the template XML.
+                            We append the value directly into cell 0
+                            after the label text using a line break.
     """
     table = doc.tables[1]
 
@@ -201,9 +203,14 @@ def _populate_problem_summary(
     _clear_content_controls(table.rows[4].cells[1])
     _set_cell_text(table.rows[4].cells[1], impacted_location)
 
-    # Row 5 — Impacted Business Unit
-    _clear_content_controls(table.rows[5].cells[1])
-    _set_cell_text(table.rows[5].cells[1], impacted_business_unit)
+    # Row 5 — Impacted Business Unit (only 1 cell — no value cell in template)
+    # Add the value as a new paragraph inside the single cell,
+    # separated from the label so it reads clearly
+    cell5 = table.rows[5].cells[0]
+    _clear_content_controls(cell5)
+    # Keep existing label text, add value as new paragraph
+    para = cell5.add_paragraph()
+    para.add_run(impacted_business_unit)
 
     # Row 6 — Impacted Service Tower
     _clear_content_controls(table.rows[6].cells[1])
@@ -213,6 +220,7 @@ def _populate_problem_summary(
     _clear_content_controls(table.rows[7].cells[1])
     _set_cell_text(table.rows[7].cells[1], impacted_application)
 
+    
 
 # ── Table 3 — Technical Investigation ────────────────────
 
